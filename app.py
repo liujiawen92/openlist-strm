@@ -478,8 +478,6 @@ def settings():
     if script_config:
         script_config = dict(script_config)
     if script_config:
-        script_config = dict(script_config)
-    script_config['download_enabled'] = bool(download_enabled)  # 将 download_enabled 传递给前端
 
     return render_template('settings.html', script_config=script_config)
 
