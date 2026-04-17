@@ -30,7 +30,7 @@ db_handler = DBHandler()
 
 
 CRON_BACKUP_FILE = "/config/cron.bak"
-ENV_FILE = "/config/app.env"
+ENV_FILE = "/app/config/app.env"
 
 # Version (read from environment, defaults to '6.0.9-fixed')
 VERSION = os.environ.get('APP_VERSION', '6.0.9-fixed')
@@ -1054,15 +1054,15 @@ def sync_cron_with_backup():
 
 import os
 
-ENV_FILE = '/config/app.env'
+ENV_FILE = '/app/config/app.env'
 
 def ensure_env_file():
     """确保 app.env 存在并同步环境变量，如果没有安全码和端口则自动填入默认值"""
     default_port = '5000'
     default_security_code = os.urandom(8).hex()
 
-    # 创建 /config 目录（如果不存在）
-    config_dir = '/config'
+    # 创建 /app/config 目录（如果不存在）
+    config_dir = '/app/config'
     if not os.path.exists(config_dir):
         os.makedirs(config_dir)
         logger.info(f"创建了目录: {config_dir}")
