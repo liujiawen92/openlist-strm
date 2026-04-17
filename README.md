@@ -57,3 +57,5 @@ openlist-strm/
 ## 许可证
 
 MIT
+
+<!-- Docker Hub rebuild trigger: 2026-04-17 16:19:40 UTC -->
