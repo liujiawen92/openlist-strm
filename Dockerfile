@@ -2,7 +2,7 @@
 # Multi-stage build for minimal image size
 #
 # Stage 1: Builder
-FROM python:3.9-slim as builder
+FROM python:3.9-slim AS builder
 
 WORKDIR /build
 
@@ -14,7 +14,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create virtual environment
 RUN python -m venv /opt/venv
-ENV /opt/venv/bin/pip bootstrap.pip
 
 # Install Python dependencies
 COPY requirements.txt .
@@ -22,7 +21,7 @@ RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 
 # Stage 2: Production
-FROM python:3.9-slim as production
+FROM python:3.9-slim AS production
 
 WORKDIR /app
 
@@ -30,13 +29,13 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 
 # Copy application files
-COPY app.py .
+COPY *.py ./
 COPY templates/ ./templates/
 COPY static/ ./static/
 
 # Python path
-ENV PATH="/opt/venv/bin:$PATH"
-ENV PYTHONPATH="/app:$PYTHONPATH"
+ENV PATH="/opt/venv/bin:${PATH}"
+ENV PYTHONPATH="/app"
 
 # Run as non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
