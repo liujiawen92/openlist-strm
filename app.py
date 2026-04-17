@@ -305,8 +305,13 @@ def edit_config(config_id):
 
             # 更新配置，包括下载启用状态、更新模式和大小阈值
             db_handler.cursor.execute('''
-                UPDATE config 
+                UPDATE config SET 
+                    config_name = ?, url = ?, username = ?, password = ?,
+                    rootpath = ?, target_directory = ?,
+                    download_interval_range = ?, download_enabled = ?
                 WHERE config_id = ?
+            ''', (config_name, url, username, password, rootpath, target_directory,
+                  download_interval_range, download_enabled, config_id))
             db_handler.conn.commit()
 
             flash('配置已成功更新！', 'success')
@@ -314,7 +319,7 @@ def edit_config(config_id):
 
         # GET 请求时，获取并显示现有的配置项
         db_handler.cursor.execute('''
-            FROM config 
+            SELECT * FROM config 
             WHERE config_id = ?
         ''', (config_id,))
         config = db_handler.cursor.fetchone()
