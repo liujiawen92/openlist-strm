@@ -1136,7 +1136,7 @@ if __name__ == '__main__':
     sync_cron_with_backup()
     ensure_env_file()
     port = load_port_from_env()
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)
 
 
 
