@@ -477,8 +477,6 @@ def settings():
 
     if script_config:
         script_config = dict(script_config)
-    if script_config:
-
     return render_template('settings.html', script_config=script_config)
 
 
