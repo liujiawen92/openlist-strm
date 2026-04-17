@@ -364,7 +364,9 @@ def new_config():
 
             # 插入新配置到数据库，确保所有字段都被插入
             db_handler.cursor.execute('''
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO config (config_name, url, username, password, rootpath, target_directory, download_enabled, download_interval_range)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (config_name, url, username, password, rootpath, target_directory, download_enabled, download_interval_range))
             db_handler.conn.commit()
 
             flash('新配置已成功添加！', 'success')
@@ -381,6 +383,7 @@ def new_config():
 def copy_config(config_id):
     try:
         # 查询要复制的配置
+        db_handler.cursor.execute('SELECT config_name, url, username, password, rootpath, target_directory, download_enabled, update_mode, download_interval_range FROM config WHERE config_id = ?', (config_id,))
         config = db_handler.cursor.fetchone()
 
         if not config:
@@ -391,8 +394,9 @@ def copy_config(config_id):
         new_name = config[0] + " - 复制"
 
         db_handler.cursor.execute('''
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (new_name, config[1], config[2], config[3], config[4], config[5], config[6], config[7], config[8]))
+            INSERT INTO config (config_name, url, username, password, rootpath, target_directory, download_enabled, download_interval_range)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (new_name, config[1], config[2], config[3], config[4], config[5], config[6], config[8]))
 
         # 提交事务
         db_handler.conn.commit()
@@ -445,7 +449,8 @@ def settings():
             # 使用现有的 db_handler 进行数据库更新
             db_handler.cursor.execute('''
                 UPDATE user_config 
-                SET video_formats = ?, subtitle_formats = ?, image_formats = ?, metadata_formats = ?,size_threshold = ?
+                SET video_formats = ?, subtitle_formats = ?, image_formats = ?, metadata_formats = ?, size_threshold = ?
+                WHERE id = 1
             ''', (video_formats, subtitle_formats, image_formats, metadata_formats, size_threshold))
             db_handler.conn.commit()
 
@@ -775,43 +780,8 @@ def download_and_extract(url, extract_to='.'):
         return False
 
 def check_for_updates(source, channel):
-    sources = {
-    }
-
-    channels = {
-        'stable': 'stable',
-        'beta': 'beta'
-    }
-
-    try:
-        # 选择源和通道
-        source_url = sources.get(source)
-        channel = channels.get(channel, 'stable')  # 默认选择正式版
-
-        # 获取版本信息
-        response = requests.get(source_url)
-        response.raise_for_status()  # 检查是否有请求错误
-
-        version_data = response.json()
-
-        # 本地版本号
-
-
-        # 比较远端版本号与本地版本号
-            # 返回更新信息
-            return {
-                "new_version": True,
-            }
-        else:
-            # 已是最新版本
-            return {"new_version": False}
-
-    except Exception as e:
-        # 出错时返回字典结构，而不是字符串
-        return {
-            "new_version": False,
-            "error": f"检查更新时出错: {e}"
-        }
+    """检查更新 — 已禁用，始终返回无更新"""
+    return {"new_version": False}
 
 
 
