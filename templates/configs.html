@@ -1,0 +1,74 @@
+﻿{% extends "base.html" %}
+{% block title %}配置文件 - OpenList-strm{% endblock %}
+{% block main %}<!-- DEBUG: configs={{ configs }} len={{ configs|length }} -->
+<div class="topbar">
+    <div class="page-title">
+        <i class="bi bi-file-earmark-code text-accent"></i> 配置文件
+        <div class="subtitle">管理所有 strm 生成配置文件</div>
+    </div>
+    <a href="{{ url_for('new_config') }}" class="btn btn-accent">
+        <i class="bi bi-plus-lg me-1"></i>新建配置
+    </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'danger' else 'info' }} alert-dismissible fade show" role="alert">
+            <i class="bi bi-{{ 'exclamation-triangle' if category == 'danger' else 'info-circle' }} me-2"></i>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+{% if configs %}
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:44px;"></th>
+                        <th>名称</th>
+                        <th>Alist地址</th>
+                        <th>网盘路径</th>
+                        <th>本地路径</th>
+                        <th style="width:160px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for config in configs %}
+                    <tr>
+                        <td><i class="bi bi-folder-fill text-accent"></i></td>
+                        <td><strong>{{ config[1] }}</strong></td>
+                        <td class="small text-secondary">{{ config[2] }}</td>
+                        <td class="small">{{ config[4] }}</td>
+                        <td class="small">{{ config[5] }}</td>
+                        <td>
+                            <a href="{{ url_for('edit_config', config_id=config[0]) }}" class="btn btn-sm btn-outline-secondary" title="编辑"><i class="bi bi-pencil"></i></a>
+                            <a href="{{ url_for('run_config', config_id=config[0]) }}" class="btn btn-sm btn-outline-success" title="立即运行" onclick="return confirm('确认立即运行该配置？')"><i class="bi bi-play-fill"></i></a>
+                            <form method="POST" action="{{ url_for('delete_config', config_id=config[0]) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除该配置吗？')"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-inbox fs-1 text-secondary"></i>
+        <p class="text-secondary mt-3 mb-3">还没有配置文件</p>
+        <a href="{{ url_for('new_config') }}" class="btn btn-accent">
+            <i class="bi bi-plus-lg me-1"></i>创建第一个配置
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

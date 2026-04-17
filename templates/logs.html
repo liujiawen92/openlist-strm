@@ -1,0 +1,64 @@
+﻿{% extends "base.html" %}
+{% block title %}运行日志 - OpenList-strm{% endblock %}
+{% block main %}
+<div class="topbar">
+    <div class="page-title">
+        <i class="bi bi-terminal text-accent"></i> 运行日志
+        <div class="subtitle">查看 strm 生成过程的详细日志</div>
+    </div>
+    <div class="d-flex gap-2">
+        <select class="form-select form-select-sm" style="width:auto;" onchange="location=this.value">
+            <option value="{{ url_for('logs') }}" {% if not selected_config %}selected{% endif %}>全部配置</option>
+            {% for cfg in config_list %}
+            <option value="{{ url_for('logs_single', config_id=cfg.id) }}" {% if selected_config==cfg.id|string %}selected{% endif %}>{{ cfg.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-terminal me-2"></i>日志记录</span>
+        <span class="badge bg-secondary">{{ logs|length }} 条记录</span>
+    </div>
+    <div class="card-body p-0">
+        {% if logs %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>配置</th>
+                        <th>状态</th>
+                        <th>详情</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="text-secondary small">{{ log.timestamp }}</td>
+                        <td><strong>{{ log.config_name }}</strong></td>
+                        <td>
+                            {% if log.status == 'success' %}
+                            <span class="badge bg-success-subtle text-success">成功</span>
+                            {% elif log.status == 'running' %}
+                            <span class="badge bg-warning-subtle text-warning">运行中</span>
+                            {% else %}
+                            <span class="badge bg-danger-subtle text-danger">失败</span>
+                            {% endif %}
+                        </td>
+                        <td class="small text-secondary">{{ log.message }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-journal-text fs-1 text-secondary"></i>
+            <p class="text-secondary mt-2">暂无日志记录</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

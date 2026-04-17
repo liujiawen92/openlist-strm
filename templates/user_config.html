@@ -1,0 +1,46 @@
+﻿{% extends "base.html" %}
+{% block title %}账号设置 - OpenList-strm{% endblock %}
+{% block main %}
+<div class="topbar">
+    <div class="page-title">
+        <i class="bi bi-person-circle text-accent"></i> 账号设置
+        <div class="subtitle">修改登录密码</div>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'success' if category == 'success' else 'info' }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="card" style="max-width:600px;">
+    <div class="card-header">
+        <i class="bi bi-key me-2"></i>修改密码
+    </div>
+    <div class="card-body">
+        <form method="post">
+            <div class="mb-3">
+                <label class="form-label">当前密码</label>
+                <input type="password" class="form-control" name="old_password" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">新密码</label>
+                <input type="password" class="form-control" name="new_password" required minlength="6">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">确认新密码</label>
+                <input type="password" class="form-control" name="confirm_password" required>
+            </div>
+            <button type="submit" class="btn btn-accent">
+                <i class="bi bi-check-lg me-1"></i>确认修改
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

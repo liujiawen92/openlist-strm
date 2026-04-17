@@ -1,0 +1,21 @@
+﻿{% extends "base.html" %}
+{% block title %}其他 - OpenList-strm{% endblock %}
+{% block main %}
+<div class="topbar"><div class="page-title"><i class="bi bi-three-dots text-accent"></i> 其他工具</div></div>
+{% with messages=get_flashed_messages(with_categories=true) %}{% if messages %}{% for c,m in messages %}<div class="alert alert-{{ 'success' if c=='success' else 'info' }}">{{ m }}</div>{% endfor %}{% endif %}{% endwith %}
+<div class="card mb-3"><div class="card-header"><i class="bi bi-pencil-square me-2"></i>批量替换域名</div>
+<div class="card-body">
+<form method="post"><input type="hidden" name="action" value="edit">
+<div class="row g-3 mb-3">
+<div class="col-md-4"><label class="form-label small text-secondary">目标目录</label><input type="text" class="form-control" name="target_directory" value="{{ script_params.get('target_directory','') }}" placeholder="/data/video"></div>
+<div class="col-md-4"><label class="form-label small text-secondary">原域名</label><input type="text" class="form-control" name="old_domain" value="{{ script_params.get('old_domain','') }}" placeholder="https://old.example.com"></div>
+<div class="col-md-4"><label class="form-label small text-secondary">新域名</label><input type="text" class="form-control" name="new_domain" value="{{ script_params.get('new_domain','') }}" placeholder="https://new.example.com"></div>
+</div>
+<button type="submit" class="btn btn-accent me-2"><i class="bi bi-check-lg me-1"></i>保存参数</button>
+<button type="submit" formaction="{{ url_for('other') }}" formmethod="post" name="action" value="run" class="btn btn-outline-accent"><i class="bi bi-play me-1"></i>执行脚本</button>
+</form></div></div>
+{% if log_content %}
+<div class="card"><div class="card-header"><i class="bi bi-terminal me-2"></i>脚本日志</div>
+<div class="card-body"><pre style="font-size:12px;color:var(--text-dim);max-height:300px;overflow:auto;background:#21262d;padding:12px;border-radius:6px;">{{ log_content }}</pre></div></div>
+{% endif %}
+{% endblock %}

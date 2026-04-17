@@ -1,0 +1,78 @@
+﻿<!DOCTYPE html>
+<html lang="zh" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OpenList-strm{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <style>
+:root{--sidebar-bg:#161b22;--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#e6edf3;--text-dim:#8b949e;--accent:#8b5cf6;--accent-h:#7c3aed;--sidebar-w:220px}
+body{background-color:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0}
+.sidebar{background-color:var(--sidebar-bg);border-right:1px solid var(--border);width:var(--sidebar-w);height:100vh;position:fixed;top:0;left:0;overflow-y:auto}
+.sidebar .brand{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sidebar .brand-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent-h));border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px}
+.sidebar .brand-name{font-weight:700;font-size:15px}
+.sidebar .brand-sub{font-size:11px;color:var(--text-dim)}
+.sidebar .nav-section{padding:10px 8px 4px;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em}
+.sidebar .nav-link{color:var(--text-dim);border-radius:6px;margin:1px 4px;padding:9px 12px;font-size:14px;transition:all .15s;text-decoration:none}
+.sidebar .nav-link:hover{background:rgba(139,92,246,.1);color:var(--text)}
+.sidebar .nav-link.active{background:rgba(139,92,246,.15);color:#c4b5fd;font-weight:600}
+.sidebar .sidebar-bottom{position:absolute;bottom:0;left:0;right:0;padding:12px 8px;border-top:1px solid var(--border)}
+.main-content{margin-left:var(--sidebar-w);padding:28px 32px;min-height:100vh}
+.card{background-color:var(--card);border:1px solid var(--border);border-radius:10px}
+.card-header{background-color:transparent;border-bottom:1px solid var(--border);font-weight:600;padding:14px 18px;font-size:15px}
+.card-body{padding:18px}
+.btn-accent{background:var(--accent);border:none;color:#fff}
+.btn-accent:hover{background:var(--accent-h);color:#fff}
+.btn-outline-accent{color:var(--accent);border:1px solid var(--accent);background:transparent}
+.btn-outline-accent:hover{background:var(--accent);color:#fff}
+.btn-outline-secondary{color:var(--text-dim);border-color:var(--border)}
+.btn-outline-secondary:hover{background:#21262d;color:var(--text)}
+.form-control,.form-select{background:#21262d;border-color:var(--border);color:var(--text)}
+.form-control:focus,.form-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,92,246,.15)}
+.form-control::placeholder{color:#6e7681}
+.table{color:var(--text)}
+.table>thead{background:rgba(139,92,246,.05)}
+.text-accent{color:var(--accent)}
+.page-title{font-size:22px;font-weight:700;margin-bottom:22px}
+.page-title small{font-size:13px;color:var(--text-dim);font-weight:400;display:block;margin-top:2px}
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px}
+.stat-card{border-radius:10px;padding:18px;background:var(--card);border:1px solid var(--border)}
+.stat-value{font-size:26px;font-weight:700;color:var(--accent)}
+.stat-label{font-size:12px;color:var(--text-dim);margin-top:4px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    {% if session.get('logged_in') %}
+    <div class="sidebar">
+        <div class="brand">
+            <div class="brand-icon"><i class="bi bi-collection-play"></i></div>
+            <div><div class="brand-name">OpenList-strm</div><div class="brand-sub">Fixed Edition</div></div>
+        </div>
+        <nav class="nav flex-column py-2">
+            <div class="nav-section">主菜单</div>
+            <a class="nav-link {% if request.endpoint=='index' %}active{% endif %}" href="{{ url_for('index') }}"><i class="bi bi-house-door me-2"></i>首页概览</a>
+            <a class="nav-link {% if request.endpoint in ['configs','edit_config','new_config'] %}active{% endif %}" href="{{ url_for('configs') }}"><i class="bi bi-file-earmark-code me-2"></i>配置文件</a>
+            <a class="nav-link {% if request.endpoint in ['scheduled_tasks','new_task'] %}active{% endif %}" href="{{ url_for('scheduled_tasks') }}"><i class="bi bi-clock me-2"></i>定时任务</a>
+            <a class="nav-link {% if request.endpoint=='settings' %}active{% endif %}" href="{{ url_for('settings') }}"><i class="bi bi-gear me-2"></i>全局设置</a>
+            <div class="nav-section">工具</div>
+            <a class="nav-link {% if request.endpoint=='invalid_file_trees' %}active{% endif %}" href="{{ url_for('invalid_file_trees') }}"><i class="bi bi-exclamation-triangle me-2"></i>失效STRM</a>
+            <a class="nav-link {% if request.endpoint in ['other','about'] %}active{% endif %}" href="{{ url_for('other') }}"><i class="bi bi-three-dots me-2"></i>其他</a>
+            <a class="nav-link {% if request.endpoint=='about' %}active{% endif %}" href="{{ url_for('about') }}"><i class="bi bi-info-circle me-2"></i>关于</a>
+        </nav>
+        <div class="sidebar-bottom">
+            <a class="nav-link text-secondary" href="{{ url_for('logout') }}" style="font-size:13px;"><i class="bi bi-box-arrow-right me-2"></i>退出登录</a>
+        </div>
+    </div>
+    <div class="main-content">{% block main %}{% endblock %}</div>
+    {% else %}
+    {% block auth_content %}{% endblock %}
+    {% endif %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

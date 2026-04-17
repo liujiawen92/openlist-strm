@@ -1,0 +1,84 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ config.name if config else '添加新配置' }}</title>
+ <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+        <link rel="shortcut icon" href="{{ url_for('static', filename='img/1.ico') }}" type="image/x-icon">
+        <style>
+
+        body {
+            background-color: #c1dcb9;
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+        h1 {
+            text-align: center;
+        }
+        .btn-right {
+            float: right;
+        }
+        .readme {
+            margin-bottom: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: .25rem;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.6); /* Add a white background with some transparency */
+            padding: 20px;
+            border-radius: .25rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="my-4">{{ config.name if config else '添加新配置' }}</h1>
+        <form action="" method="post">
+            <div class="form-group">
+                <label for="name">配置名称</label>
+                <input type="text" class="form-control" id="name" name="name" value="{{ config.name if config else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="root_path">监控路径（比如你要监控https://域名：端口/路径，就填/路径） </label>
+                <input type="text" class="form-control" id="root_path" name="root_path" value="{{ config.root_path if config else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="site_url">alist的URL（#alist地址，注意一定不要带/）</label>
+                <input type="text" class="form-control" id="site_url" name="site_url" value="{{ config.site_url if config else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="target_directory">目标目录（结尾不要带/）</label>
+                <input type="text" class="form-control" id="target_directory" name="target_directory" value="{{ config.target_directory if config else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="ignored_directories">忽略的目录（可以随便填，但是不要填你监控路径里有的。用逗号分隔）注意：必填！</label>
+                <input type="text" class="form-control" id="ignored_directories" name="ignored_directories" value="{{ config.ignored_directories if config else '' }}">
+            </div>
+            <div class="form-group">
+                <label for="token">令牌（alist后台获取token）</label>
+                <input type="text" class="form-control" id="token" name="token" value="{{ config.token if config else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="update_existing">alist是否启用签名（非特殊需求不推荐打开，因为会对alist产生一定负担）</label>
+                <select class="form-control" id="update_existing" name="update_existing">
+                    <option value="0" {{ 'selected' if config and not config.update_existing else '' }}>禁用</option>
+                    <option value="1" {{ 'selected' if config and config.update_existing else '' }}>启用</option>
+                </select>
+            </div>
+            
+            
+            <button type="submit" class="btn btn-primary">{{ '更新' if config else '添加' }}</button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">取消</a>
+        </form>
+                <footer class="text-center mt-4">
+            <p>© 2024 OpenList-strm配置管理最终版 by <a href="https://www.openlist-strm0829.cn" target="_blank">openlist-strm</a></p>
+        </footer>
+    </div>
+    <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+</body>
+</html>

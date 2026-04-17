@@ -1,0 +1,85 @@
+﻿{% extends "base.html" %}
+{% block title %}首页 - OpenList-strm{% endblock %}
+{% block main %}
+{% block content %}
+<div class="topbar">
+    <div class="page-title">
+        <i class="bi bi-house-door text-accent"></i> 首页概览
+        <small>查看系统运行状态</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('new_config') }}" class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> 新建配置</a>
+        <a href="{{ url_for('scheduled_tasks') }}" class="btn btn-outline-accent btn-sm"><i class="bi bi-clock"></i> 定时任务</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ 'danger' if category=='danger' else 'info' }} alert-dismissible fade show" role="alert">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+{% endif %}
+{% endwith %}
+
+{% if stats %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="stat-card"><div class="stat-value">{{ stats.configs|default(0) }}</div><div class="stat-label">配置文件</div></div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-card"><div class="stat-value">{{ stats.tasks|default(0) }}</div><div class="stat-label">定时任务</div></div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-card"><div class="stat-value">{{ stats.running|default(0) }}</div><div class="stat-label">运行中</div></div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="stat-card"><div class="stat-value">{{ stats.success|default(0) }}</div><div class="stat-label">成功</div></div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul me-2"></i>配置文件</span>
+        <a href="{{ url_for('configs') }}" class="btn btn-sm btn-outline-accent">查看全部</a>
+    </div>
+    <div class="card-body p-0">
+        {% if recent_configs %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th></th><th>名称</th><th>Alist</th><th>路径</th><th>状态</th><th>操作</th></tr></thead>
+                <tbody>
+                    {% for config in recent_configs %}
+                    <tr>
+                        <td><i class="bi bi-folder text-accent"></i></td>
+                        <td><strong>{{ config.name }}</strong></td>
+                        <td class="small text-secondary">{{ config.alist_url }}</td>
+                        <td class="small">{{ config.path }}</td>
+                        <td>
+                            {% if config.enabled %}
+                            <span class="badge bg-success-subtle text-success">启用</span>
+                            {% else %}
+                            <span class="badge bg-secondary">禁用</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('edit', config_id=config.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-inbox fs-1 text-secondary"></i>
+            <p class="text-secondary mt-2 mb-3">暂无配置文件</p>
+            <a href="{{ url_for('new_config') }}" class="btn btn-accent"><i class="bi bi-plus-lg me-1"></i>创建第一个配置</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+{% endblock %}

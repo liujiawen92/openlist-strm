@@ -1,0 +1,16 @@
+﻿{% extends "base.html" %}
+{% block title %}失效STRM - OpenList-strm{% endblock %}
+{% block main %}
+<div class="topbar"><div class="page-title"><i class="bi bi-exclamation-triangle text-accent"></i> 失效STRM文件</div></div>
+<div class="card"><div class="card-body p-0">
+{% if invalid_file_trees %}
+<table class="table table-hover mb-0"><thead><tr><th></th><th>文件名</th><th>操作</th></tr></thead><tbody>
+{% for item in invalid_file_trees %}
+<tr><td class="ps-3"><i class="bi bi-file-earmark-code" style="color:#f85149"></i></td>
+<td><a href="{{ url_for('view_invalid_directory', directory_name=item.name) }}">{{ item.name }}</a></td>
+<td><form method="post" action="{{ url_for('delete_invalid_directory', json_filename=item.name) }}" style="display:inline;" onsubmit="return confirm('确定删除？')"><button type="submit" class="btn btn-sm" style="color:#f85149;"><i class="bi bi-trash"></i></button></form></td>
+</tr>{% endfor %}</tbody></table>
+{% else %}
+<div class="text-center py-5"><i class="bi bi-check-circle fs-1 text-success"></i><p class="text-secondary mt-2">暂无失效STRM文件 🎉</p></div>
+{% endif %}</div></div>
+{% endblock %}
