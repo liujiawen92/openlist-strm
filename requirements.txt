@@ -1,7 +1,7 @@
 # Core dependencies
-flask>=2.0
-werkzeug>=2.0
-requests>=2.28
+flask>=2.0,<3.0
+werkzeug>=2.0,<3.0
+requests>=2.28,<3.0
 
 # Task scheduling (cron wrapper + fallback)
 apscheduler>=3.10,<4.0

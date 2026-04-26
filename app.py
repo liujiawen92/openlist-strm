@@ -7,6 +7,8 @@ import json
 import subprocess
 import zipfile
 import requests
+import time
+import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, session, g, abort, jsonify
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -17,6 +19,54 @@ from task_scheduler import add_tasks_to_cron, update_tasks_in_cron, delete_tasks
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'openlist-strm-fixed-secret-key-2026')
+
+
+# ===== 暴力破解防护配置 =====
+MAX_ATTEMPTS = int(os.environ.get('LOGIN_MAX_ATTEMPTS', '5'))
+BAN_MINUTES = int(os.environ.get('LOGIN_BAN_MINUTES', '30'))
+# 格式: { ip_or_user: { "count": N, "first_failure": timestamp } }
+_login_failures = {}
+
+
+def get_login_failures_key(username, ip):
+    return f"{ip}:{username}"
+
+
+def is_banned(username, ip):
+    key = get_login_failures_key(username, ip)
+    record = _login_failures.get(key)
+    if not record:
+        return False
+    elapsed = time.time() - record['first_failure']
+    if elapsed > BAN_MINUTES * 60:
+        # 已过封禁期，清除记录
+        _login_failures.pop(key, None)
+        return False
+    remaining = int(BAN_MINUTES * 60 - elapsed)
+    return remaining > 0
+
+
+def get_ban_remaining_seconds(username, ip):
+    key = get_login_failures_key(username, ip)
+    record = _login_failures.get(key)
+    if not record:
+        return 0
+    elapsed = time.time() - record['first_failure']
+    remaining = BAN_MINUTES * 60 - elapsed
+    return max(0, int(remaining))
+
+
+def record_failed_login(username, ip):
+    key = get_login_failures_key(username, ip)
+    record = _login_failures.get(key, {'count': 0, 'first_failure': time.time()})
+    record['count'] += 1
+    record['first_failure'] = time.time()
+    _login_failures[key] = record
+
+
+def clear_failed_logins(username, ip):
+    key = get_login_failures_key(username, ip)
+    _login_failures.pop(key, None)
 
 
 # 定义图片文件夹路径
@@ -84,6 +134,8 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    client_ip = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown').split(',')[0].strip()
+
     if request.method == 'POST':
         # 获取表单数据
         username = request.form['username']
@@ -92,15 +144,28 @@ def login():
         # 获取存储的用户凭证
         stored_username, stored_password_hash = db_handler.get_user_credentials()
 
+        # —— 暴力破解防护检查 ——
+        if is_banned(username, client_ip):
+            remaining = get_ban_remaining_seconds(username, client_ip)
+            flash(f'登录失败次数过多，请 {remaining} 秒后重试', 'error')
+            return render_template('login.html')
+
         # 检查用户名和密码
         if username == stored_username and check_password_hash(stored_password_hash, password):
-            # 登录成功
+            # 登录成功，清除失败记录
+            clear_failed_logins(username, client_ip)
             session['logged_in'] = True
             session['username'] = username
             flash('登录成功', 'success')
             return redirect(url_for('index'))
         else:
-            flash('用户名或密码错误', 'error')
+            # 登录失败，记录
+            record_failed_login(username, client_ip)
+            remaining = get_ban_remaining_seconds(username, client_ip)
+            if remaining > 0:
+                flash(f'登录失败次数过多，请 {remaining} 秒后重试', 'error')
+            else:
+                flash('用户名或密码错误', 'error')
 
     return render_template('login.html')
 
@@ -109,6 +174,52 @@ def logout():
     session.clear()
     flash('您已退出登录', 'success')
     return redirect(url_for('login'))
+
+
+# ===== 紧急密码重置 =====
+EMERGENCY_RESET_CODE = os.environ.get('EMERGENCY_RESET_CODE', '')
+_logger = setup_logger(__name__)
+
+
+@app.route('/emergency-reset', methods=['GET', 'POST'])
+def emergency_reset():
+    """紧急密码重置：需要正确的 EMERGENCY_RESET_CODE 环境变量才能使用"""
+    client_ip = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown').split(',')[0].strip()
+
+    if not EMERGENCY_RESET_CODE:
+        flash('紧急重置功能未启用（未设置 EMERGENCY_RESET_CODE 环境变量）', 'error')
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+        new_password = request.form.get('new_password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+
+        if code != EMERGENCY_RESET_CODE:
+            _logger.warning(f'[EMERGENCY_RESET] 错误的重置码，来源 IP: {client_ip}')
+            flash('重置码错误', 'error')
+            return render_template('emergency_reset.html')
+
+        if not new_password or len(new_password) < 4:
+            flash('新密码长度至少 4 位', 'error')
+            return render_template('emergency_reset.html')
+
+        if new_password != confirm_password:
+            flash('两次输入的密码不一致', 'error')
+            return render_template('emergency_reset.html')
+
+        # 设置新密码
+        password_hash = generate_password_hash(new_password)
+        db_handler.set_user_credentials(None, password_hash)
+
+        _logger.warning(
+            f'[EMERGENCY_RESET] 密码重置成功，IP: {client_ip}，'
+            f'时间: {datetime.datetime.now().isoformat()}'
+        )
+        flash('密码已重置，请使用新密码登录', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('emergency_reset.html')
 
 
 # 首页
