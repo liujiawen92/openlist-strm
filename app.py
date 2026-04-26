@@ -16,7 +16,7 @@ from task_scheduler import add_tasks_to_cron, update_tasks_in_cron, delete_tasks
 
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', os.urandom(32).hex())
+app.secret_key = os.environ.get('SECRET_KEY', 'openlist-strm-fixed-secret-key-2026')
 
 
 # 定义图片文件夹路径
