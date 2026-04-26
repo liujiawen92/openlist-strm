@@ -1471,43 +1471,6 @@ def clear_broken_strms(config_id):
     return redirect(url_for('broken_strms'))
 
 
-# ============================================================================
-# Settings — 增强：批量大小 & API限速
-# ============================================================================
-
-@app.route('/settings', methods=['GET', 'POST'])
-def settings():
-    # 原有逻辑...
-    # (keep existing settings logic)
-    if request.method == 'POST':
-        video_formats = request.form.get('video_formats', 'mp4,mkv,avi,mov,flv,wmv,ts,m2ts,iso')
-        subtitle_formats = request.form.get('subtitle_formats', 'srt,ass,sub')
-        image_formats = request.form.get('image_formats', 'jpg,png,bmp')
-        metadata_formats = request.form.get('metadata_formats', 'nfo')
-        size_threshold = int(request.form.get('size_threshold', 50)) * 1024 * 1024
-        auto_delete = int(request.form.get('auto_delete', 0))
-        parallel_tasks = int(request.form.get('parallel_tasks', 1))
-        batch_size = int(request.form.get('batch_size', 10))
-        api_rate_limit_ms = int(request.form.get('api_rate_limit_ms', 500))
-
-        # Validate
-        batch_size = max(1, min(batch_size, 100))
-        api_rate_limit_ms = max(100, min(api_rate_limit_ms, 5000))
-
-        try:
-            db_handler.cursor.execute('''
-                UPDATE script_config SET
-                    size_threshold=?, auto_delete=?, parallel_tasks=?,
-                    batch_size=?, api_rate_limit_ms=?
-                WHERE id=1
-            ''', (size_threshold, auto_delete, parallel_tasks, batch_size, api_rate_limit_ms))
-            db_handler.conn.commit()
-            flash('设置已保存', 'success')
-        except Exception as e:
-            flash(f'保存设置失败: {e}', 'error')
-
-    script_config = db_handler.get_script_config()
-    return render_template('settings.html', script_config=script_config)
 
 
 # ============================================================================
