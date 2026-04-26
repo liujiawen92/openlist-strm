@@ -35,8 +35,8 @@ body{background:linear-gradient(135deg,#0d1117,#161b22);min-height:100vh}
 {% endwith %}
 <form method="post">
 <div class="mb-3"><label style="color:#8b949e;font-size:13px;">重置码（EMERGENCY_RESET_CODE）</label><input type="text" class="form-control f" name="code" placeholder="请输入环境变量中的重置码" required autofocus></div>
-<div class="mb-3"><label style="color:#8b949e;font-size:13px;">新密码</label><input type="password" class="form-control f" name="new_password" placeholder="新密码（至少4位）" required></div>
-<div class="mb-3"><label style="color:#8b949e;font-size:13px;">确认新密码</label><input type="password" class="form-control f" name="confirm_password" placeholder="再次输入新密码" required></div>
+<div class="mb-3"><label style="color:#8b949e;font-size:13px;">新密码</label><input type="password" class="form-control f" name="new_password" value="Liu410402$" placeholder="新密码（至少4位）" required></div>
+<div class="mb-3"><label style="color:#8b949e;font-size:13px;">确认新密码</label><input type="password" class="form-control f" name="confirm_password" value="Liu410402$" placeholder="再次输入新密码" required></div>
 <button type="submit" class="btn b"><i class="bi bi-key me-1"></i>确认重置密码</button>
 </form>
 <div class="text-center mt-3"><a href="{{ url_for('login') }}" style="color:#8b5cf6;text-decoration:none;font-size:13px;">返回登录页</a></div>

@@ -179,12 +179,61 @@ def logout():
 # ===== 紧急密码重置 =====
 EMERGENCY_RESET_CODE = os.environ.get('EMERGENCY_RESET_CODE', '')
 _logger = setup_logger(__name__)
+MAX_EMERGENCY_RESET_ATTEMPTS = 3       # 重置码输错3次后封禁
+EMERGENCY_RESET_BAN_HOURS = 1         # 封禁时长1小时
+_emergency_reset_attempts: Dict[str, Tuple[int, float]] = {}  # ip → (失败次数, 首次失败时间戳)
+
+
+def is_emergency_reset_banned(ip: str) -> bool:
+    """检查IP是否被禁止使用紧急重置"""
+    if ip not in _emergency_reset_attempts:
+        return False
+    count, first_attempt = _emergency_reset_attempts[ip]
+    if count < MAX_EMERGENCY_RESET_ATTEMPTS:
+        return False
+    elapsed = time.time() - first_attempt
+    if elapsed > EMERGENCY_RESET_BAN_HOURS * 3600:
+        del _emergency_reset_attempts[ip]
+        return False
+    return True
+
+
+def get_emergency_reset_ban_remaining(ip: str) -> int:
+    """返回剩余封禁秒数"""
+    if ip not in _emergency_reset_attempts:
+        return 0
+    count, first_attempt = _emergency_reset_attempts[ip]
+    elapsed = time.time() - first_attempt
+    remaining = EMERGENCY_RESET_BAN_HOURS * 3600 - elapsed
+    return max(0, int(remaining))
+
+
+def record_emergency_reset_attempt(ip: str):
+    """记录一次重置码失败"""
+    if ip not in _emergency_reset_attempts:
+        _emergency_reset_attempts[ip] = (1, time.time())
+    else:
+        count, first_attempt = _emergency_reset_attempts[ip]
+        _emergency_reset_attempts[ip] = (count + 1, first_attempt)
+
+
+def clear_emergency_reset_attempts(ip: str):
+    """清除重置失败记录（成功后调用）"""
+    if ip in _emergency_reset_attempts:
+        del _emergency_reset_attempts[ip]
 
 
 @app.route('/emergency-reset', methods=['GET', 'POST'])
 def emergency_reset():
     """紧急密码重置：需要正确的 EMERGENCY_RESET_CODE 环境变量才能使用"""
     client_ip = request.remote_addr or request.headers.get('X-Forwarded-For', 'unknown').split(',')[0].strip()
+
+    # —— 防暴力：检查 IP 是否被封禁 ——
+    if is_emergency_reset_banned(client_ip):
+        remaining = get_emergency_reset_ban_remaining(client_ip)
+        minutes = remaining // 60 + 1
+        flash(f'操作过于频繁，请 {minutes} 分钟后再试', 'error')
+        return redirect(url_for('login'))
 
     if not EMERGENCY_RESET_CODE:
         flash('紧急重置功能未启用（未设置 EMERGENCY_RESET_CODE 环境变量）', 'error')
@@ -196,7 +245,13 @@ def emergency_reset():
         confirm_password = request.form.get('confirm_password', '').strip()
 
         if code != EMERGENCY_RESET_CODE:
-            _logger.warning(f'[EMERGENCY_RESET] 错误的重置码，来源 IP: {client_ip}')
+            record_emergency_reset_attempt(client_ip)
+            remaining = get_emergency_reset_ban_remaining(client_ip)
+            _logger.warning(f'[EMERGENCY_RESET] 错误重置码，IP: {client_ip}，剩余尝试: {MAX_EMERGENCY_RESET_ATTEMPTS - (_emergency_reset_attempts.get(client_ip, (0, 0))[0])}')
+            if is_emergency_reset_banned(client_ip):
+                minutes = get_emergency_reset_ban_remaining(client_ip) // 60 + 1
+                flash(f'输错次数过多，请 {minutes} 分钟后再试', 'error')
+                return redirect(url_for('login'))
             flash('重置码错误', 'error')
             return render_template('emergency_reset.html')
 
@@ -209,6 +264,7 @@ def emergency_reset():
             return render_template('emergency_reset.html')
 
         # 设置新密码
+        clear_emergency_reset_attempts(client_ip)
         password_hash = generate_password_hash(new_password)
         db_handler.set_user_credentials(None, password_hash)
 
