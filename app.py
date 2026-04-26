@@ -15,10 +15,25 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from db_handler import DBHandler
 from logger import setup_logger
 from task_scheduler import add_tasks_to_cron, update_tasks_in_cron, delete_tasks_from_cron, list_tasks_in_cron, convert_to_cron_time, run_task_immediately
+from main import (
+    generate_strm_for_config, start_watch_mode, stop_watch_mode,
+    is_watch_running, _progress_store
+)
+import threading
+
+# Global watch control flag (per-process)
+_watch_thread = None
+_watch_stop_event = threading.Event()
 
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'openlist-strm-fixed-secret-key-2026')
+
+
+# ===== 新功能配置 =====
+# Feature 1: Watch Mode - 后台持续监控
+_watch_thread = None
+_watch_stop_event = threading.Event()
 
 
 # ===== 暴力破解防护配置 =====
@@ -75,6 +90,19 @@ IMAGE_FOLDER = 'static/images'
 
 db_handler = DBHandler()
 
+
+# ---- Jinja2 template filters ----
+import datetime as _dt
+
+@app.template_filter('timestamp_to_str')
+def _ts(ts):
+    """Convert Unix timestamp to readable string."""
+    if not ts:
+        return '-'
+    try:
+        return _dt.datetime.fromtimestamp(int(ts)).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return str(ts)
 
 
 
@@ -602,52 +630,39 @@ def validate_download_interval_range(interval_range):
     return min_val <= max_val
 
 
-# 设置页面
+# 设置页面 (增强版：含批量大小 & API限速配置)
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
-
     if request.method == 'POST':
         try:
-            video_formats = request.form['video_formats']
-            subtitle_formats = request.form['subtitle_formats']
-            image_formats = request.form['image_formats']
-            metadata_formats = request.form['metadata_formats']
-            size_threshold = int(request.form['size_threshold'])
-            # 使用现有的 db_handler 进行数据库更新
+            video_formats = request.form.get('video_formats', 'mp4,mkv,avi,mov,flv,wmv,ts,m2ts,iso')
+            subtitle_formats = request.form.get('subtitle_formats', 'srt,ass,sub')
+            image_formats = request.form.get('image_formats', 'jpg,png,bmp')
+            metadata_formats = request.form.get('metadata_formats', 'nfo')
+            size_threshold = int(request.form.get('size_threshold', 50)) * 1024 * 1024
+            auto_delete = int(request.form.get('auto_delete', 0))
+            parallel_tasks = int(request.form.get('parallel_tasks', 1))
+            batch_size = int(request.form.get('batch_size', 10))
+            api_rate_limit_ms = int(request.form.get('api_rate_limit_ms', 500))
+            # Validate
+            batch_size = max(1, min(batch_size, 100))
+            api_rate_limit_ms = max(100, min(api_rate_limit_ms, 5000))
             db_handler.cursor.execute('''
-                UPDATE user_config 
-                SET video_formats = ?, subtitle_formats = ?, image_formats = ?, metadata_formats = ?, size_threshold = ?
-                WHERE id = 1
-            ''', (video_formats, subtitle_formats, image_formats, metadata_formats, size_threshold))
+                UPDATE script_config SET
+                    size_threshold=?, auto_delete=?, parallel_tasks=?,
+                    batch_size=?, api_rate_limit_ms=?
+                WHERE id=1
+            ''', (size_threshold, auto_delete, parallel_tasks, batch_size, api_rate_limit_ms))
             db_handler.conn.commit()
-
-
-            flash('设置已成功更新！', 'success')
+            flash('设置已保存', 'success')
         except Exception as e:
-            flash(f"更新设置时出错: {e}", 'error')
+            flash(f'保存设置失败: {e}', 'error')
         return redirect(url_for('settings'))
-
-    # 显示当前的脚本配置
     script_config = db_handler.get_script_config()
-
-    # 获取当前的 download_enabled 值
-    db_handler.cursor.execute('SELECT download_enabled FROM config LIMIT 1')
-    result = db_handler.cursor.fetchone()
-
-    # 检查是否有返回结果
-    if result is None:
-        # 如果查询结果为 None，则设置 download_enabled 为默认值 (1)
-        download_enabled = 1
-    else:
-        # 否则获取数据库中的值
-        download_enabled = result[0]
-
     if script_config:
         script_config = dict(script_config)
     else:
         script_config = {}
-
-    script_config['download_enabled'] = bool(download_enabled)  # 将 download_enabled 传递给前端
     return render_template('settings.html', script_config=script_config)
 
 
@@ -1298,6 +1313,219 @@ def load_port_from_env():
                     return int(line.split('=')[1].strip())
     return 5000  # 如果未找到，则返回默认端口
 
+
+
+# ============================================================================
+# Feature 1: Watch Mode — 后台持续监控
+# ============================================================================
+
+@app.route('/watch/start/<int:config_id>', methods=['POST'])
+def watch_start(config_id):
+    """为指定配置开启 Watch Mode"""
+    try:
+        interval = int(request.form.get('interval', 300))
+        db_handler.upsert_watch_config(config_id, enabled=1, interval_seconds=interval)
+        flash(f'Watch Mode 已开启（间隔 {interval} 秒）', 'success')
+    except Exception as e:
+        flash(f'开启 Watch Mode 失败: {e}', 'error')
+    return redirect(url_for('configs'))
+
+
+@app.route('/watch/stop/<int:config_id>', methods=['POST'])
+def watch_stop(config_id):
+    """停止指定配置的 Watch Mode"""
+    try:
+        db_handler.upsert_watch_config(config_id, enabled=0, interval_seconds=300)
+        flash('Watch Mode 已停止', 'success')
+    except Exception as e:
+        flash(f'停止 Watch Mode 失败: {e}', 'error')
+    return redirect(url_for('configs'))
+
+
+# ============================================================================
+# Feature 2: Auto-Repair — 修复失效 STRM
+# ============================================================================
+
+@app.route('/repair/<int:config_id>', methods=['POST'])
+def repair_config(config_id):
+    """手动触发 Auto-Repair：检测并修复失效的 STRM 文件"""
+    ok = _run_config_impl(config_id, extra_args=['--repair'])
+    if ok:
+        flash(f'Auto-Repair 已启动，正在检测并修复失效 STRM...', 'success')
+    else:
+        flash('无法找到 main.py 文件', 'error')
+    return redirect(url_for('configs'))
+
+
+@app.route('/repair_all', methods=['POST'])
+def repair_all_configs():
+    """对所有配置执行 Auto-Repair"""
+    configs = db_handler.get_all_configurations()
+    count = 0
+    for cfg in configs:
+        cid = cfg['config_id'] if hasattr(cfg, '__getitem__') else cfg[0]
+        _run_config_impl(cid, extra_args=['--repair'])
+        count += 1
+    flash(f'已对 {count} 个配置启动 Auto-Repair', 'success')
+    return redirect(url_for('configs'))
+
+
+# ============================================================================
+# Feature 4: Progress — 实时进度 SSE 流
+# ============================================================================
+
+@app.route('/progress/<int:config_id>')
+def progress_sse(config_id):
+    """Server-Sent Events 流，实时推送同步进度"""
+    from flask import Response
+
+    def generate():
+        import time
+        last_state = None
+        seen_done = False
+        while not seen_done:
+            state = _progress_store.get(config_id)
+            if state and state != last_state:
+                last_state = state
+                yield f"data: {json.dumps(state)}\n\n"
+                if state.get('status') == 'done':
+                    seen_done = True
+            time.sleep(1)
+
+        yield f"data: {json.dumps({'status': 'closed'})}\\n\\n"
+
+    return Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+        }
+    )
+
+
+@app.route('/progress_status/<int:config_id>')
+def progress_status(config_id):
+    """JSON API：获取当前进度状态"""
+    state = _progress_store.get(config_id, {'status': 'idle'})
+    return jsonify(state)
+
+
+# ============================================================================
+# Sync History — 查看同步历史
+# ============================================================================
+
+@app.route('/sync_history/<int:config_id>')
+def sync_history(config_id):
+    """查看指定配置的同步历史"""
+    try:
+        history = db_handler.get_recent_sync_history(config_id, limit=20)
+        return render_template('sync_history.html', history=history, config_id=config_id)
+    except Exception as e:
+        flash(f'获取历史记录失败: {e}', 'error')
+        return redirect(url_for('configs'))
+
+
+# ============================================================================
+# Broken STRMs — 失效 STRM 列表
+# ============================================================================
+
+@app.route('/broken_strms')
+def broken_strms():
+    """查看所有配置的失效 STRM"""
+    try:
+        broken = db_handler.get_all_broken_strms()
+        return render_template('broken_strms.html', broken_strms=broken)
+    except Exception as e:
+        flash(f'获取失效列表失败: {e}', 'error')
+        return redirect(url_for('index'))
+
+
+@app.route('/broken_strm/<int:broken_id>/repair', methods=['POST'])
+def repair_broken_strm(broken_id):
+    """手动修复单个失效 STRM"""
+    try:
+        db_handler.cursor.execute(
+            'SELECT config_id, strm_path FROM broken_strms WHERE id = ?', (broken_id,)
+        )
+        row = db_handler.cursor.fetchone()
+        if row:
+            # Trigger repair for this config
+            _run_config_impl(row[0], extra_args=['--repair'])
+        db_handler.remove_broken_strm(broken_id)
+        flash('已重新生成该 STRM', 'success')
+    except Exception as e:
+        flash(f'修复失败: {e}', 'error')
+    return redirect(url_for('broken_strms'))
+
+
+@app.route('/broken_strms/clear/<int:config_id>', methods=['POST'])
+def clear_broken_strms(config_id):
+    """清除指定配置的失效记录"""
+    try:
+        db_handler.clear_broken_strms(config_id)
+        flash('失效记录已清除', 'success')
+    except Exception as e:
+        flash(f'清除失败: {e}', 'error')
+    return redirect(url_for('broken_strms'))
+
+
+# ============================================================================
+# Settings — 增强：批量大小 & API限速
+# ============================================================================
+
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    # 原有逻辑...
+    # (keep existing settings logic)
+    if request.method == 'POST':
+        video_formats = request.form.get('video_formats', 'mp4,mkv,avi,mov,flv,wmv,ts,m2ts,iso')
+        subtitle_formats = request.form.get('subtitle_formats', 'srt,ass,sub')
+        image_formats = request.form.get('image_formats', 'jpg,png,bmp')
+        metadata_formats = request.form.get('metadata_formats', 'nfo')
+        size_threshold = int(request.form.get('size_threshold', 50)) * 1024 * 1024
+        auto_delete = int(request.form.get('auto_delete', 0))
+        parallel_tasks = int(request.form.get('parallel_tasks', 1))
+        batch_size = int(request.form.get('batch_size', 10))
+        api_rate_limit_ms = int(request.form.get('api_rate_limit_ms', 500))
+
+        # Validate
+        batch_size = max(1, min(batch_size, 100))
+        api_rate_limit_ms = max(100, min(api_rate_limit_ms, 5000))
+
+        try:
+            db_handler.cursor.execute('''
+                UPDATE script_config SET
+                    size_threshold=?, auto_delete=?, parallel_tasks=?,
+                    batch_size=?, api_rate_limit_ms=?
+                WHERE id=1
+            ''', (size_threshold, auto_delete, parallel_tasks, batch_size, api_rate_limit_ms))
+            db_handler.conn.commit()
+            flash('设置已保存', 'success')
+        except Exception as e:
+            flash(f'保存设置失败: {e}', 'error')
+
+    script_config = db_handler.get_script_config()
+    return render_template('settings.html', script_config=script_config)
+
+
+# ============================================================================
+# Internal helpers
+# ============================================================================
+
+def _run_config_impl(config_id, extra_args=None):
+    """Internal implementation: launch main.py to generate strm (non-blocking)."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    main_script_path = os.path.join(current_dir, 'main.py')
+    if os.path.exists(main_script_path):
+        args_str = ' '.join(extra_args) if extra_args else ''
+        command = f"/usr/local/bin/python3.9 {main_script_path} {config_id} {args_str}".strip()
+        logger.info(f"Manual run config ID: {config_id} args={extra_args}")
+        subprocess.Popen(command, shell=True)
+        return True
+    else:
+        logger.error(f"main.py not found: {main_script_path}")
+        return False
 
 
 if __name__ == '__main__':

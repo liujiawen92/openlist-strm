@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}失效 STRM - OpenList-strm{% endblock %}
+{% block main %}
+<div class="topbar">
+    <div class="page-title">
+        <i class="bi bi-exclamation-triangle text-accent"></i> 失效 STRM
+        <small>自动修复检测结果</small>
+    </div>
+    <div class="d-flex gap-2">
+        <form method="post" action="{{ url_for('repair_all_configs') }}">
+            <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-tools"></i> 全量修复</button>
+        </form>
+        <a href="{{ url_for('index') }}" class="btn btn-outline-accent btn-sm"><i class="bi bi-house"></i> 首页</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+<div class="card-header"><i class="bi bi-list-check me-2"></i>失效文件列表</div>
+<div class="card-body table-responsive">
+{% if broken_strms %}
+<table class="table table-hover align-middle">
+<thead><tr>
+    <th>配置</th><th>STRM 路径</th><th>错误信息</th><th>检测时间</th><th>操作</th>
+</tr></thead>
+<tbody>
+{% for b in broken_strms %}
+<tr>
+    <td><span class="badge bg-info">{{ b.config_name or b.config_id }}</span></td>
+    <td><small class="text-break">{{ b.strm_path }}</small></td>
+    <td><small class="text-danger">{{ b.error_msg }}</small></td>
+    <td><small>{{ (b.detected_at | timestamp_to_str) if b.detected_at else '-' }}</small></td>
+    <td>
+        <form method="post" action="{{ url_for('repair_broken_strm', broken_id=b.id) }}" style="display:inline">
+            <button type="submit" class="btn btn-sm btn-warning"><i class="bi bi-arrow-clockwise"></i> 修复</button>
+        </form>
+    </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<div class="text-success text-center py-4">
+    <i class="bi bi-check-circle" style="font-size:48px;"></i>
+    <p class="mt-2">暂无失效文件，一切正常 ✅</p>
+</div>
+{% endif %}
+</div>
+</div>
+{% endblock %}

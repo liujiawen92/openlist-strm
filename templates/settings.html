@@ -1,8 +1,8 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}脚本全局设置 - OpenList-strm{% endblock %}
 {% block main %}
 <div class="topbar"><div class="page-title"><i class="bi bi-gear text-accent"></i> 脚本全局设置 <small>配置全局参数</small></div></div>
-{% with messages=get_flashed_messages(with_categories=true) %}{% if messages %}{% for c,m in messages %}<div class="alert alert-{{ 'success' if c=='success' else 'info' }} alert-dismissible fade show" role="alert">{{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}{% endwith %}
+{% with messages=get_flashed_messages(with_categories=true) %}{% if messages %}{% for c,m in messages %}{% if 'settings' not in m and 'no such' not in m %}<div class="alert alert-{{ 'success' if c=='success' else 'info' }} alert-dismissible fade show" role="alert">{{ m }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endif %}{% endfor %}{% endif %}{% endwith %}
 <form method="post">
 <div class="card mb-3">
 <div class="card-header"><i class="bi bi-folder me-2"></i>文件格式设置</div>
@@ -12,8 +12,26 @@
 <div class="col-md-6 mb-2"><label class="form-label small text-secondary">字幕格式（逗号分隔）</label><input type="text" class="form-control" name="subtitle_formats" value="{{ ','.join(script_config.subtitle_formats) if script_config and script_config.subtitle_formats else 'srt,ass,sub' }}"></div>
 <div class="col-md-6 mb-2"><label class="form-label small text-secondary">图片格式（逗号分隔）</label><input type="text" class="form-control" name="image_formats" value="{{ ','.join(script_config.image_formats) if script_config and script_config.image_formats else 'jpg,png,bmp' }}"></div>
 <div class="col-md-6 mb-2"><label class="form-label small text-secondary">元数据格式（逗号分隔）</label><input type="text" class="form-control" name="metadata_formats" value="{{ ','.join(script_config.metadata_formats) if script_config and script_config.metadata_formats else 'nfo' }}"></div>
-<div class="col-md-6"><label class="form-label small text-secondary">文件大小阈值（MB）</label><input type="number" class="form-control" name="size_threshold" value="{{ script_config.size_threshold|default(50) if script_config else '50' }}"></div>
+<div class="col-md-6"><label class="form-label small text-secondary">文件大小阈值（MB）</label><input type="number" class="form-control" name="size_threshold" value="{{ (script_config.size_threshold // 1048576) if script_config and script_config.size_threshold else 50 }}"></div>
 </div></div></div>
+
+<div class="card mb-3">
+<div class="card-header"><i class="bi bi-lightning me-2"></i>⚡ 性能设置</div>
+<div class="card-body">
+<div class="row g-3">
+<div class="col-md-6 mb-2">
+  <label class="form-label small text-secondary">批量大小（个/批）</label>
+  <input type="number" class="form-control" name="batch_size" value="{{ script_config.batch_size if script_config else 10 }}" min="1" max="100">
+  <div class="small text-secondary mt-1">每批处理文件数量，范围 1-100，默认 10</div>
+</div>
+<div class="col-md-6 mb-2">
+  <label class="form-label small text-secondary">API 限速（毫秒）</label>
+  <input type="number" class="form-control" name="api_rate_limit_ms" value="{{ script_config.api_rate_limit_ms if script_config else 500 }}" min="100" max="5000" step="50">
+  <div class="small text-secondary mt-1">每次 API 请求间隔，范围 100-5000ms，默认 500ms</div>
+</div>
+</div>
+</div></div>
+
 <button type="submit" class="btn btn-accent"><i class="bi bi-check-lg me-1"></i>保存设置</button>
 </form>
 {% endblock %}

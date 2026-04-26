@@ -1,14 +1,22 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}配置文件 - OpenList-strm{% endblock %}
-{% block main %}<!-- DEBUG: configs={{ configs }} len={{ configs|length }} -->
+{% block main %}
 <div class="topbar">
     <div class="page-title">
         <i class="bi bi-file-earmark-code text-accent"></i> 配置文件
         <div class="subtitle">管理所有 strm 生成配置文件</div>
     </div>
-    <a href="{{ url_for('new_config') }}" class="btn btn-accent">
-        <i class="bi bi-plus-lg me-1"></i>新建配置
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('broken_strms') }}" class="btn btn-outline-warning btn-sm">
+            <i class="bi bi-exclamation-triangle me-1"></i>失效STRM
+        </a>
+        <a href="{{ url_for('settings') }}" class="btn btn-outline-accent btn-sm">
+            <i class="bi bi-gear me-1"></i>全局设置
+        </a>
+        <a href="{{ url_for('new_config') }}" class="btn btn-accent btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>新建配置
+        </a>
+    </div>
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -24,34 +32,95 @@
 {% endwith %}
 
 {% if configs %}
+<div class="card mb-3">
+<div class="card-body py-2 px-3" style="background:#21262d;border-radius:8px 8px 0 0;">
+    <div class="d-flex gap-4 small text-secondary">
+        <span>⚡ 批量大小：<span id="batch-display" class="text-warning">-</span></span>
+        <span>⏱️ API限速：<span id="rate-limit-display" class="text-info">-</span></span>
+        <span>🔧 增量同步</span>
+        <span>🔍 自动修复（下次运行）</span>
+        <span>📡 Watch Mode</span>
+    </div>
+</div>
+</div>
+
 <div class="card">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th style="width:44px;"></th>
+                        <th style="width:40px;"></th>
                         <th>名称</th>
                         <th>Alist地址</th>
                         <th>网盘路径</th>
                         <th>本地路径</th>
-                        <th style="width:160px;">操作</th>
+                        <th style="width:360px;">操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for config in configs %}
-                    <tr>
+                    {% set cid = config[0] %}
+                    <tr id="row-{{ cid }}">
                         <td><i class="bi bi-folder-fill text-accent"></i></td>
                         <td><strong>{{ config[1] }}</strong></td>
                         <td class="small text-secondary">{{ config[2] }}</td>
                         <td class="small">{{ config[4] }}</td>
                         <td class="small">{{ config[5] }}</td>
                         <td>
-                            <a href="{{ url_for('edit_config', config_id=config[0]) }}" class="btn btn-sm btn-outline-secondary" title="编辑"><i class="bi bi-pencil"></i></a>
-                            <a href="{{ url_for('run_config', config_id=config[0]) }}" class="btn btn-sm btn-outline-success" title="立即运行" onclick="return confirm('确认立即运行该配置？')"><i class="bi bi-play-fill"></i></a>
-                            <form method="POST" action="{{ url_for('delete_config', config_id=config[0]) }}" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除该配置吗？')"><i class="bi bi-trash"></i></button>
-                            </form>
+                            <div class="d-flex flex-wrap gap-1">
+                                <!-- 立即运行 -->
+                                <a href="{{ url_for('run_config', config_id=cid) }}"
+                                   class="btn btn-sm btn-outline-success"
+                                   title="立即运行（增量同步）"
+                                   onclick="return confirm('确认立即运行该配置？')">
+                                    <i class="bi bi-play-fill"></i>
+                                </a>
+                                <!-- 自动修复 -->
+                                <form method="POST" action="{{ url_for('repair_config', config_id=cid) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-warning" title="检测并修复失效的STRM文件">
+                                        <i class="bi bi-tools"></i>
+                                    </button>
+                                </form>
+                                <!-- Watch Mode 开关 -->
+                                <span id="watch-btn-{{ cid }}">
+                                    <form method="POST" action="{{ url_for('watch_start', config_id=cid) }}" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-outline-info" title="开启 Watch Mode（后台持续监控）">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </form>
+                                </span>
+                                <!-- 日志 -->
+                                <a href="{{ url_for('logs', config_id=cid) }}"
+                                   class="btn btn-sm btn-outline-secondary" title="查看日志">
+                                    <i class="bi bi-journal-text"></i>
+                                </a>
+                                <!-- 历史 -->
+                                <a href="{{ url_for('sync_history', config_id=cid) }}"
+                                   class="btn btn-sm btn-outline-secondary" title="同步历史">
+                                    <i class="bi bi-clock-history"></i>
+                                </a>
+                                <!-- 编辑 -->
+                                <a href="{{ url_for('edit_config', config_id=cid) }}"
+                                   class="btn btn-sm btn-outline-secondary" title="编辑">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <!-- 删除 -->
+                                <form method="POST" action="{{ url_for('delete_config', config_id=cid) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('确定删除该配置吗？')" title="删除">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                            <!-- 进度条 -->
+                            <div id="progress-{{ cid }}" class="mt-2" style="display:none;">
+                                <div class="progress" style="height:6px;">
+                                    <div id="progress-bar-{{ cid }}" class="progress-bar bg-success"
+                                         role="progressbar" style="width:0%"></div>
+                                </div>
+                                <small class="text-secondary" id="progress-text-{{ cid }}"></small>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -60,6 +129,35 @@
         </div>
     </div>
 </div>
+
+<script>
+// Poll progress for each config
+async function pollProgress(configId) {
+    const res = await fetch(`/progress_status/${configId}`);
+    const data = await res.json();
+    if (data.status === 'idle' || data.status === 'closed') {
+        document.getElementById(`progress-${configId}`).style.display = 'none';
+        return;
+    }
+    const el = document.getElementById(`progress-${configId}`);
+    const bar = document.getElementById(`progress-bar-${configId}`);
+    const text = document.getElementById(`progress-text-${configId}`);
+    el.style.display = 'block';
+    const pct = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
+    bar.style.width = pct + '%';
+    text.textContent = `${data.processed || 0}/${data.total || 0} 文件 | ` +
+        `创建 ${data.created || 0} | 修复 ${data.repaired || 0} | 失败 ${data.failed || 0}`;
+    if (data.status !== 'done') {
+        setTimeout(() => pollProgress(configId), 1000);
+    }
+}
+
+// Start polling when page loads
+document.querySelectorAll('tr[id^="row-"]').forEach(row => {
+    pollProgress(row.id.replace('row-', ''));
+});
+</script>
+
 {% else %}
 <div class="card">
     <div class="card-body text-center py-5">

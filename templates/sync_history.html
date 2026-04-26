@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}同步历史 - OpenList-strm{% endblock %}
+{% block main %}
+<div class="topbar">
+    <div class="page-title">
+        <i class="bi bi-clock-history text-accent"></i> 同步历史
+        <small>Config #{{ config_id }}</small>
+    </div>
+    <div><a href="{{ url_for('configs') }}" class="btn btn-outline-accent btn-sm"><i class="bi bi-arrow-left"></i> 返回配置</a></div>
+</div>
+
+<div class="card mb-3">
+<div class="card-header"><i class="bi bi-list-check me-2"></i>最近同步记录</div>
+<div class="card-body table-responsive">
+{% if history %}
+<table class="table table-hover align-middle">
+<thead><tr>
+    <th>#</th><th>开始时间</th><th>耗时</th><th>创建</th><th>修复</th><th>失败</th><th>状态</th><th>日志摘要</th>
+</tr></thead>
+<tbody>
+{% for h in history %}
+<tr>
+    <td>{{ h.id }}</td>
+    <td>{{ (h.started_at | timestamp_to_str) if h.started_at else '-' }}</td>
+    <td>
+        {% if h.started_at and h.finished_at %}
+            {{ ((h.finished_at - h.started_at) | int) }}秒
+        {% else %}
+            -
+        {% endif %}
+    </td>
+    <td><span class="badge bg-success">+{{ h.files_created or 0 }}</span></td>
+    <td><span class="badge bg-warning text-dark">🔧 {{ h.files_repaired or 0 }}</span></td>
+    <td><span class="badge bg-danger">{{ h.files_failed or 0 }}</span></td>
+    <td>
+        {% if h.status == 'done' %}
+            <span class="badge bg-success">完成</span>
+        {% elif h.status == 'partial' %}
+            <span class="badge bg-warning text-dark">部分完成</span>
+        {% elif h.status == 'running' %}
+            <span class="badge bg-primary">运行中</span>
+        {% else %}
+            <span class="badge bg-secondary">{{ h.status }}</span>
+        {% endif %}
+    </td>
+    <td><small class="text-secondary">{{ h.log or '-' }}</small></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% else %}
+<div class="text-secondary text-center py-4">暂无同步记录</div>
+{% endif %}
+</div>
+</div>
+{% endblock %}
