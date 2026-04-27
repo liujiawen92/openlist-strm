@@ -93,6 +93,20 @@ class DBHandler:
                 'INSERT INTO script_config (id) VALUES (1)'
             )
             self.conn.commit()
+        
+        # ===== Migration: Add missing columns to script_config =====
+        self.cursor.execute('PRAGMA table_info(script_config)')
+        existing_columns = {col[1] for col in self.cursor.fetchall()}
+        
+        migrations = [
+            ('batch_size', 'INTEGER DEFAULT 10'),
+            ('api_rate_limit_ms', 'INTEGER DEFAULT 500')
+        ]
+        
+        for col_name, col_def in migrations:
+            if col_name not in existing_columns:
+                self.cursor.execute(f'ALTER TABLE script_config ADD COLUMN {col_name} {col_def}')
+                self.conn.commit()
 
     def get_user_credentials(self):
         self.cursor.execute('SELECT username, password_hash FROM user LIMIT 1')
