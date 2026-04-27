@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.9
+#!/usr/bin/env python3
 """
 OpenList-strm WebDAV sync engine.
 Generates and maintains .strm files by syncing WebDAV directory trees.

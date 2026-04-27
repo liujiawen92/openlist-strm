@@ -2,6 +2,7 @@
 Uses APScheduler for all task scheduling (crontab unavailable in Docker).
 """
 import os
+import sys
 import shutil
 import subprocess
 import logging
@@ -66,7 +67,7 @@ def _schedule_job(task):
         pass
 
     config_id = task.get("config_ids", [""])[0]
-    command = f'/usr/local/bin/python3.9 /app/main.py {config_id}'
+    command = f'{sys.executable} /app/main.py {config_id}'
     if task.get("task_mode") == "full":
         command += " --full"
 
@@ -93,6 +94,7 @@ def _schedule_job(task):
 
 def convert_to_cron_time(interval_type, interval_value):
     """Convert interval type and value to cron expression (5-field)."""
+    interval_value = int(interval_value)
     minute, hour, day, month, weekday = "*", "*", "*", "*", "*"
     if interval_type == "minute":
         minute = f"*/{interval_value}"
@@ -170,7 +172,7 @@ def run_task_immediately(task_id):
     if not task:
         raise ValueError(f"Task {task_id} not found")
     config_id = task.get("config_ids", [""])[0]
-    command = f'/usr/local/bin/python3.9 /app/main.py {config_id}'
+    command = f'{sys.executable} /app/main.py {config_id}'
     if task.get("task_mode") == "full":
         command += " --full"
     subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

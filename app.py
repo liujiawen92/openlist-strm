@@ -727,7 +727,7 @@ def _run_config_impl(config_id):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     main_script_path = os.path.join(current_dir, 'main.py')
     if os.path.exists(main_script_path):
-        command = f"/usr/local/bin/python3.9 {main_script_path} {config_id}"
+        command = f"{sys.executable} {main_script_path} {config_id}"
         logger.info(f"手动运行配置ID: {config_id}")
         subprocess.Popen(command, shell=True)
         return True
@@ -1487,7 +1487,7 @@ def _run_config_impl(config_id, extra_args=None):
     main_script_path = os.path.join(current_dir, 'main.py')
     if os.path.exists(main_script_path):
         args_str = ' '.join(extra_args) if extra_args else ''
-        command = f"/usr/local/bin/python3.9 {main_script_path} {config_id} {args_str}".strip()
+        command = f"{sys.executable} {main_script_path} {config_id} {args_str}".strip()
         logger.info(f"Manual run config ID: {config_id} args={extra_args}")
         subprocess.Popen(command, shell=True)
         return True
