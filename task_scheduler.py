@@ -15,7 +15,7 @@ _scheduler = BackgroundScheduler(timezone="Asia/Shanghai", job_defaults={"coales
 _scheduler_started = False
 _tasks = {}
 _task_counter = 0
-TASKS_FILE = "/config/scheduler_tasks.json"
+TASKS_FILE = "/app/data/scheduler_tasks.json"
 
 
 def _has_crontab():
