@@ -1,335 +1,176 @@
-"""
-OpenList-strm Task Scheduler
-System cron wrapper for managing periodic sync tasks.
-Falls back to APScheduler if cron is unavailable.
+"""OpenList-strm Task Scheduler
+Uses APScheduler for all task scheduling (crontab unavailable in Docker).
 """
 import os
-import re
+import shutil
 import subprocess
 import logging
-import time
+import atexit
+import json
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# In-memory store for tasks (backup when cron isn't available)
-_scheduler = BackgroundScheduler()
+_logger = logging.getLogger(__name__)
+_scheduler = BackgroundScheduler(timezone="Asia/Shanghai", job_defaults={"coalesce": True, "max_instances": 1})
 _scheduler_started = False
-_task_store = {}  # task_id -> task dict
+_tasks = {}
 _task_counter = 0
-
-CRON_MARKER_START = "# === OpenList-strm Task Scheduler Start ==="
-CRON_MARKER_END = "# === OpenList-STrm Task Scheduler End ==="
-CRON_BACKUP_FILE = "/config/cron.bak"
+TASKS_FILE = "/config/scheduler_tasks.json"
 
 
-def _ensure_marker_in_crontab():
-    """Ensure the OpenList-strm cron section exists in crontab."""
-    result = subprocess.run(
-        ['crontab', '-l'], capture_output=True, text=True
-    )
-    existing = result.stdout or ''
-    
-    if CRON_MARKER_START not in existing:
-        marker_block = f"\n{CRON_MARKER_START}\n{CRON_MARKER_END}\n"
-        new_cron = existing.rstrip() + marker_block
-        subprocess.run(f'(echo "{new_cron}") | crontab -', shell=True)
+def _has_crontab():
+    """Check if crontab command is available."""
+    return shutil.which("crontab") is not None
 
 
-def _extract_tasks_from_crontab():
-    """Parse crontab and extract OpenList-strm tasks."""
+def _load_tasks():
+    """Load tasks from backup JSON file."""
+    global _tasks, _task_counter
+    if os.path.exists(TASKS_FILE):
+        try:
+            with open(TASKS_FILE, "r") as f:
+                data = json.load(f)
+                _tasks = data.get("tasks", {})
+                _task_counter = data.get("counter", 0)
+        except Exception:
+            pass
+
+
+def _save_tasks():
+    """Persist tasks to JSON backup."""
+    os.makedirs(os.path.dirname(TASKS_FILE), exist_ok=True)
+    with open(TASKS_FILE, "w") as f:
+        json.dump({"tasks": _tasks, "counter": _task_counter}, f)
+
+
+def _start_scheduler():
+    """Start APScheduler if not already started."""
+    global _scheduler_started
+    if not _scheduler_started:
+        _scheduler.start()
+        _scheduler_started = True
+        atexit.register(_scheduler.shutdown)
+        _load_tasks()
+        for task in _tasks.values():
+            _schedule_job(task)
+
+
+def _schedule_job(task):
+    """Add a job to APScheduler."""
+    if not task.get("is_enabled", True):
+        return
+    job_id = task["task_id"]
     try:
-        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
-        lines = (result.stdout or '').strip().split('\n')
+        _scheduler.remove_job(job_id)
     except Exception:
-        return []
-    
-    tasks = []
-    in_block = False
-    for line in lines:
-        line = line.strip()
-        if CRON_MARKER_START in line:
-            in_block = True
-            continue
-        if CRON_MARKER_END in line:
-            in_block = False
-            continue
-        if not in_block or not line or line.startswith('#'):
-            continue
-        
-        parts = line.split(None, 5)
-        if len(parts) < 6:
-            continue
-        
-        cron_time = ' '.join(parts[:5])
-        command = parts[5] if len(parts) > 5 else ''
-        
-        # Parse config_ids and task info from command comment
-        # Format: /app/main.py ... # TASK_<task_id>_<config_ids>_<task_name>_<enabled>
-        task_id = None
-        config_ids = []
-        task_name = 'Untitled'
-        is_enabled = True
-        
-        if '# TASK_' in command:
-            cmd_part, meta_part = command.rsplit('# TASK_', 1)
-            meta = meta_part.strip()
-            
-            segments = meta.split('_', 4)
-            if len(segments) >= 1 and segments[0]:
-                task_id = segments[0]
-            if len(segments) >= 2 and segments[1]:
-                config_ids = [c for c in segments[1].split(',') if c]
-            if len(segments) >= 4:
-                task_name = segments[2]
-                is_enabled = segments[3].lower() != 'disabled'
-            
-            command = cmd_part.strip()
-        
-        tasks.append({
-            'task_id': task_id,
-            'cron_time': cron_time,
-            'command': command,
-            'config_ids': config_ids,
-            'task_name': task_name,
-            'is_enabled': is_enabled,
-        })
-    
-    return tasks
+        pass
 
+    config_id = task.get("config_ids", [""])[0]
+    command = f'/usr/local/bin/python3.9 /app/main.py {config_id}'
+    if task.get("task_mode") == "full":
+        command += " --full"
 
-def _save_cron_backup(tasks):
-    """Save current tasks to backup file."""
-    os.makedirs(os.path.dirname(CRON_BACKUP_FILE), exist_ok=True)
-    with open(CRON_BACKUP_FILE, 'w') as f:
-        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
-        current = result.stdout or ''
-        
-        # Rebuild crontab with new tasks
-        lines = current.split('\n')
-        new_lines = []
-        skip = False
-        for line in lines:
-            if CRON_MARKER_START in line:
-                skip = True
-                continue
-            if CRON_MARKER_END in line:
-                skip = False
-                continue
-            if not skip:
-                new_lines.append(line)
-        
-        # Write back without our section (will re-add below)
-        subprocess.run(
-            f'(echo "{chr(10).join(new_lines).rstrip()}") | crontab -',
-            shell=True
+    cron_time = task.get("cron_time", "* * * * *")
+    parts = cron_time.split()
+    if len(parts) >= 5:
+        minute, hour, day, month, dow = parts[0], parts[1], parts[2], parts[3], parts[4]
+        trigger = CronTrigger(
+            minute=minute, hour=hour, day=day, month=month, day_of_week=dow
         )
-        
-        # Write backup
-        backup_lines = ['']
-        for task in tasks:
-            if task.get('is_enabled', True):
-                meta = f"TASK_{task['task_id']}_{','.join(task['config_ids'])}_{task['task_name']}_enabled"
-            else:
-                meta = f"TASK_{task['task_id']}_{','.join(task['config_ids'])}_{task['task_name']}_disabled"
-            cron_line = f"{task['cron_time']} {task['command']} # {meta}"
-            backup_lines.append(cron_line)
-        
-        f.write('\n'.join(backup_lines) + '\n')
+    else:
+        trigger = CronTrigger(minute="*")
 
+    def run_job():
+        try:
+            subprocess.Popen(
+                command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        except Exception as e:
+            _logger.error(f"Task {job_id} failed: {e}")
 
-def list_tasks_in_cron():
-    """List all OpenList-strm cron tasks."""
-    try:
-        return _extract_tasks_from_crontab()
-    except Exception:
-        return list(_task_store.values())
+    _scheduler.add_job(run_job, trigger=trigger, id=job_id, replace_existing=True)
 
 
 def convert_to_cron_time(interval_type, interval_value):
-    """
-    Convert interval type and value to cron expression.
-    
-    interval_type: 'minute' | 'hourly' | 'daily' | 'weekly' | 'monthly'
-    interval_value: integer (minute=1-59, hourly=1-23, daily=1-31, weekly=0-6, monthly=1-12)
-    
-    Returns: cron expression string
-    """
-    minute, hour, day, month, weekday = '*', '*', '*', '*', '*'
-    
-    if interval_type == 'minute':
-        minute = f'*/{interval_value}'
-    elif interval_type == 'hourly':
-        minute = '0'
-        hour = f'*/{interval_value}'
-    elif interval_type == 'daily':
-        minute = '0'
-        hour = '0'
-        day = f'*/{interval_value}'
-    elif interval_type == 'weekly':
-        minute = '0'
-        hour = '0'
+    """Convert interval type and value to cron expression (5-field)."""
+    minute, hour, day, month, weekday = "*", "*", "*", "*", "*"
+    if interval_type == "minute":
+        minute = f"*/{interval_value}"
+    elif interval_type == "hourly":
+        minute = "0"
+        hour = f"*/{interval_value}"
+    elif interval_type == "daily":
+        minute, hour = "0", "0"
+        day = f"*/{interval_value}" if interval_value > 1 else "*"
+    elif interval_type == "weekly":
+        minute, hour = "0", "0"
         weekday = str(interval_value)
-    elif interval_type == 'monthly':
-        minute = '0'
-        hour = '0'
-        day = '1'
-        month = f'*/{interval_value}'
-    
-    return f'{minute} {hour} {day} {month} {weekday}'
+    elif interval_type == "monthly":
+        minute, hour, day = "0", "0", "1"
+        month = f"*/{interval_value}" if interval_value > 1 else "*"
+    return f"{minute} {hour} {day} {month} {weekday}"
 
 
-def add_tasks_to_cron(task_name, cron_time, config_ids, task_mode='incremental', is_enabled=True):
-    """
-    Add a new cron task for each config_id.
-    
-    Returns: list of created task_id strings
-    """
-    global _task_counter, _scheduler_started
-    
-    if not _scheduler_started:
-        _scheduler.start()
-        _scheduler_started = True
-    
+def list_tasks():
+    """Return all tasks."""
+    _start_scheduler()
+    return list(_tasks.values())
+
+
+def add_tasks_to_cron(task_name, cron_time, config_ids, task_mode="incremental", is_enabled=True):
+    """Add new tasks using APScheduler."""
+    global _task_counter
+    _start_scheduler()
+
     task_ids = []
-    
     for config_id in config_ids:
         _task_counter += 1
         task_id = str(_task_counter)
-        
-        # Build command: run main.py for this config
-        command = f'/usr/local/bin/python3.9 /app/main.py {config_id}'
-        if task_mode == 'full':
-            command += ' --full'
-        
-        # Build crontab entry with metadata comment
-        meta = f"TASK_{task_id}_{config_id}_{task_name}_{'enabled' if is_enabled else 'disabled'}"
-        cron_line = f'{cron_time} {command} # {meta}'
-        
-        # Update crontab
-        _ensure_marker_in_crontab()
-        try:
-            result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
-            current = result.stdout or ''
-        except Exception:
-            current = ''
-        
-        # Replace marker section
-        new_block = f'\n{CRON_MARKER_START}\n'
-        # Find existing tasks (not this new one)
-        existing_tasks = []
-        lines = current.split('\n')
-        in_block = False
-        for line in lines:
-            if CRON_MARKER_START in line:
-                in_block = True
-                continue
-            if CRON_MARKER_END in line:
-                in_block = False
-                continue
-            if in_block:
-                existing_tasks.append(line)
-        
-        new_block += '\n'.join(existing_tasks + [cron_line])
-        new_block += f'\n{CRON_MARKER_END}'
-        
-        new_cron = re.sub(
-            f'\n{CRON_MARKER_START}.*?{CRON_MARKER_END}\n',
-            new_block,
-            current,
-            flags=re.DOTALL
-        )
-        if CRON_MARKER_START not in new_cron:
-            new_cron = current.rstrip() + new_block
-        
-        subprocess.run(f'(echo "{new_cron}") | crontab -', shell=True)
-        
-        task_ids.append(task_id)
-        
-        # Also store in memory for APScheduler fallback
-        _task_store[task_id] = {
-            'task_id': task_id,
-            'task_name': task_name,
-            'cron_time': cron_time,
-            'config_ids': [str(config_id)],
-            'command': command,
-            'task_mode': task_mode,
-            'is_enabled': is_enabled,
+        task = {
+            "task_id": task_id,
+            "task_name": task_name,
+            "cron_time": cron_time,
+            "config_ids": [str(config_id)],
+            "task_mode": task_mode,
+            "is_enabled": is_enabled,
         }
-    
+        _tasks[task_id] = task
+        _schedule_job(task)
+        task_ids.append(task_id)
+
+    _save_tasks()
     return task_ids
 
 
-def update_tasks_in_cron(task_ids, cron_time, config_ids, task_name, task_mode='incremental', is_enabled=True):
-    """Update existing cron tasks."""
-    global _scheduler_started
-    
-    if not _scheduler_started:
-        _scheduler.start()
-        _scheduler_started = True
-    
-    # For simplicity, delete old tasks and re-add
+def update_tasks_in_cron(task_ids, cron_time, config_ids, task_name, task_mode="incremental", is_enabled=True):
+    """Update existing tasks."""
+    _start_scheduler()
     for tid in task_ids:
-        _task_store.pop(tid, None)
-    
-    delete_tasks_from_cron(task_ids)
+        if tid in _tasks:
+            _scheduler.remove_job(tid)
+        _tasks.pop(tid, None)
     return add_tasks_to_cron(task_name, cron_time, config_ids, task_mode, is_enabled)
 
 
 def delete_tasks_from_cron(task_ids):
-    """Remove tasks from crontab by task_id."""
-    try:
-        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
-        current = result.stdout or ''
-    except Exception:
-        current = ''
-    
-    lines = current.split('\n')
-    new_lines = []
-    skip = False
-    
-    for line in lines:
-        if CRON_MARKER_START in line:
-            skip = True
-            continue
-        if CRON_MARKER_END in line:
-            skip = False
-            continue
-        
-        if skip:
-            # Check if this line belongs to a task we're deleting
-            should_delete = False
-            for tid in task_ids:
-                if f'# TASK_{tid}_' in line:
-                    should_delete = True
-                    break
-            if should_delete:
-                continue
-        
-        new_lines.append(line)
-    
-    new_cron = '\n'.join(new_lines)
-    subprocess.run(f'(echo "{new_cron}") | crontab -', shell=True)
+    """Remove tasks."""
+    _start_scheduler()
+    for tid in task_ids:
+        try:
+            _scheduler.remove_job(tid)
+        except Exception:
+            pass
+        _tasks.pop(tid, None)
+    _save_tasks()
 
 
 def run_task_immediately(task_id):
-    """Execute a task's command immediately via subprocess."""
-    tasks = list_tasks_in_cron()
-    task = next((t for t in tasks if t.get('task_id') == task_id), None)
-    
-    if not task:
-        task = _task_store.get(task_id)
-    
+    """Run a task immediately."""
+    task = _tasks.get(task_id)
     if not task:
         raise ValueError(f"Task {task_id} not found")
-    
-    command = task.get('command')
-    if not command:
-        raise ValueError(f"No command for task {task_id}")
-    
-    # Run in background
-    subprocess.Popen(
-        command,
-        shell=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
+    config_id = task.get("config_ids", [""])[0]
+    command = f'/usr/local/bin/python3.9 /app/main.py {config_id}'
+    if task.get("task_mode") == "full":
+        command += " --full"
+    subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -15,7 +15,7 @@ from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from db_handler import DBHandler
 from logger import setup_logger
-from task_scheduler import add_tasks_to_cron, update_tasks_in_cron, delete_tasks_from_cron, list_tasks_in_cron, convert_to_cron_time, run_task_immediately
+from task_scheduler import add_tasks_to_cron, update_tasks_in_cron, delete_tasks_from_cron, list_tasks, convert_to_cron_time, run_task_immediately
 from main import (
     generate_strm_for_config, start_watch_mode, stop_watch_mode,
     is_watch_running, _progress_store
@@ -778,7 +778,7 @@ def run_selected_configs():
 def scheduled_tasks():
     try:
         # 从定时任务模块中获取所有定时任务
-        tasks = list_tasks_in_cron()  # 调用 task_scheduler.py 的 list_tasks_in_cron 方法
+        tasks = list_tasks()  # 调用 task_scheduler.py 的 list_tasks 方法
         return render_template('scheduled_tasks.html', tasks=tasks)
     except Exception as e:
         flash(f'获取定时任务时出错: {e}', 'error')
@@ -872,7 +872,7 @@ def update_task(task_id):
         return redirect(url_for('scheduled_tasks'))
 
     # GET 请求时，加载任务信息
-    tasks = list_tasks_in_cron()  # 调用 task_scheduler.py 的 list_tasks_in_cron 方法
+    tasks = list_tasks()  # 调用 task_scheduler.py 的 list_tasks 方法
     task = next((t for t in tasks if t.get('task_id') == task_id), None)
     configs = db_handler.get_all_configurations()
 
@@ -1039,7 +1039,7 @@ def other():
 
 def run_task_immediately(task_id):
     # 获取所有任务
-    tasks = list_tasks_in_cron()
+    tasks = list_tasks()
 
     # 查找指定 task_id 对应的任务
     task_to_run = next((task for task in tasks if task.get('task_id') == task_id), None)
