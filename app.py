@@ -27,6 +27,10 @@ _watch_thread = None
 _watch_stop_event = threading.Event()
 
 
+
+# Initialize logger for module-level use (compatible with gunicorn workers)
+logger, log_file = setup_logger('app')
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'openlist-strm-fixed-secret-key-2026')
 
@@ -1493,7 +1497,6 @@ def _run_config_impl(config_id, extra_args=None):
 
 
 if __name__ == '__main__':
-    logger, log_file = setup_logger('app')
     # 启动应用之前先检查更新
     # check_and_apply_updates()  # DISABLED: auto-update causes crash loop
     sync_cron_with_backup()
